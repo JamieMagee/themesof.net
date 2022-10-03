@@ -69,7 +69,7 @@ public partial class WorkItemFilter : IDisposable
         _commands = commands.ToArray();
 
         _hotKeysContext = HotKeys.CreateContext();
-        _hotKeysContext.Add(ModKeys.None, Keys.ESC, () => JSRuntime.InvokeVoidAsync("blurElement", _inputRef), allowIn: AllowIn.Input);
+        _hotKeysContext.Add(ModKeys.None, Keys.ESC, () => JSRuntime.InvokeVoidAsync("blurElement", _inputRef));
         _hotKeysContext.Add(ctrl, Keys.Slash, () => _inputRef.FocusAsync());
 
         foreach (var command in _commands)
