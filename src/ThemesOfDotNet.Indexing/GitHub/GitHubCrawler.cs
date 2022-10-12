@@ -1095,10 +1095,19 @@ public sealed class GitHubCrawler
                        .ToArray();
     }
 
-    private Task<IReadOnlyList<Project>> GetProjectsAsync(string org)
+    private async Task<IReadOnlyList<Project>> GetProjectsAsync(string org)
     {
-        var projectRequest = new ProjectRequest(ItemStateFilter.Open);
-        return CallGitHub(c => c.Repository.Project.GetAllForOrganization(org, projectRequest));
+        try
+        {
+            var projectRequest = new ProjectRequest(ItemStateFilter.Open);
+            return await CallGitHub(c => c.Repository.Project.GetAllForOrganization(org, projectRequest));
+        }
+        catch (Exception ex)
+        {
+            GitHubActions.Warning($"Can't crawl projects for {org}");
+            GitHubActions.Warning(ex);
+            return Array.Empty<Project>();
+        }
     }
 
     private Task<Project> GetProjectAsync(long projectId)
