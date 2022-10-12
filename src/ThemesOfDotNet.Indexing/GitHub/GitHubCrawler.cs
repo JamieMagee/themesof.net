@@ -1021,8 +1021,16 @@ public sealed class GitHubCrawler
 
         foreach (var repoName in repoNames)
         {
-            var repo = await GetRepoAsync(org, repoName);
-            result.Add(repo);
+            try
+            {
+                var repo = await GetRepoAsync(org, repoName);
+                result.Add(repo);
+            }
+            catch (Exception ex)
+            {
+                GitHubActions.Warning($"Can't crawl repo {org}/{repoName}");
+                GitHubActions.Warning(ex);
+            }
         }
 
         return result.ToArray();
