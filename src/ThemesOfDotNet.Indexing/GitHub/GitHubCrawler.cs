@@ -1,10 +1,18 @@
 ﻿using System.Diagnostics;
 
 using Octokit;
+using Octokit.Webhooks;
+using Octokit.Webhooks.Events;
+using Octokit.Webhooks.Events.Issues;
+using Octokit.Webhooks.Events.Label;
+using Octokit.Webhooks.Events.Milestone;
+using Octokit.Webhooks.Events.Project;
+using Octokit.Webhooks.Events.ProjectCard;
+using Octokit.Webhooks.Events.ProjectColumn;
+using Octokit.Webhooks.Events.PullRequest;
+using Octokit.Webhooks.Events.Repository;
 
 using Spectre.Console;
-
-using Terrajobst.GitHubEvents;
 
 using ThemesOfDotNet.Indexing.Configuration;
 using ThemesOfDotNet.Indexing.WorkItems;
@@ -340,174 +348,195 @@ public sealed class GitHubCrawler
         _initializedFromCache = true;
     }
 
-    public Task<bool> UpdateAsync(GitHubEventMessage message, IWorkspaceCrawlerQueue queue)
+    public Task<bool> UpdateAsync(WebhookEvent message, IWorkspaceCrawlerQueue queue)
     {
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventRepository))
+        switch (message)
         {
-            var owner = message.Body.Organization.Login;
-            var repoName = message.Body.Repository.Name;
-
-            switch (message.Kind)
+            case RepositoryEvent repositoryEvent:
             {
-                case GitHubEventMessageKind.RepositoryCreated:
-                    // Don't care
-                    break;
-                case GitHubEventMessageKind.RepositoryDeleted:
-                    return DeleteRepoAsync(owner, repoName);
-                case GitHubEventMessageKind.RepositoryArchived:
-                case GitHubEventMessageKind.RepositoryUnarchived:
-                case GitHubEventMessageKind.RepositoryPublicized:
-                case GitHubEventMessageKind.RepositoryPrivatized:
-                    return UpdateRepoAsync(owner, repoName);
-                case GitHubEventMessageKind.RepositoryRenamed:
-                    var fromRepoName = message.Body.Changes.AdditionalData["repository"]!["name"]!.Value<string>("from")!;
-                    return UpdateRepoAsync(owner, fromRepoName);
-            }
-        }
+                var owner = repositoryEvent.Organization!.Login;
+                var repoName = repositoryEvent.Repository!.Name;
 
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventLabel))
-        {
-            var owner = message.Body.Organization.Login;
-            var repoName = message.Body.Repository.Name;
-            var labelId = message.Body.Label.Id;
-            var labelName = message.Body.Label.Name;
-
-            switch (message.Kind)
-            {
-                case GitHubEventMessageKind.LabelCreated:
-                case GitHubEventMessageKind.LabelEdited:
-                    return UpdateLabelAsync(owner, repoName, labelId, labelName);
-                case GitHubEventMessageKind.LabelDeleted:
-                    return DeleteLabelAsync(owner, repoName, labelId);
-            }
-        }
-
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventMilestone))
-        {
-            var owner = message.Body.Organization.Login;
-            var repoName = message.Body.Repository.Name;
-            var milestoneId = message.Body.Milestone.Id;
-            var milestoneNumber = message.Body.Milestone.Number;
-
-            switch (message.Kind)
-            {
-                case GitHubEventMessageKind.MilestoneCreated:
-                case GitHubEventMessageKind.MilestoneEdited:
-                case GitHubEventMessageKind.MilestoneClosed:
-                case GitHubEventMessageKind.MilestoneOpened:
-                    return UpdateMilestoneAsync(owner, repoName, milestoneId, milestoneNumber);
-                case GitHubEventMessageKind.MilestoneDeleted:
-                    return DeleteMilestoneAsync(owner, repoName, milestoneId);
-            }
-        }
-
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventIssue))
-        {
-            var owner = message.Body.Organization.Login;
-            var repoName = message.Body.Repository.Name;
-            var issueNumber = message.Body.Issue.Number;
-            var labels = message.Body.Issue.Labels.Select(l => l.Name);
-
-            switch (message.Kind)
-            {
-                case GitHubEventMessageKind.IssueOpened:
-                case GitHubEventMessageKind.IssueReopened:
-                case GitHubEventMessageKind.IssueClosed:
-                case GitHubEventMessageKind.IssueEdited:
-                case GitHubEventMessageKind.IssueAssigned:
-                case GitHubEventMessageKind.IssueUnassigned:
-                case GitHubEventMessageKind.IssueLabeled:
-                case GitHubEventMessageKind.IssueUnlabeled:
-                case GitHubEventMessageKind.IssueMilestoned:
-                case GitHubEventMessageKind.IssueDemilestoned:
-                case GitHubEventMessageKind.IssueLocked:
-                case GitHubEventMessageKind.IssueUnlocked:
-                    return UpdateIssueAsync(owner, repoName, issueNumber, labels, queue);
-                case GitHubEventMessageKind.IssueTransferred:
-                    var newOwner = message.Body.Changes.NewRepository.Owner.Login;
-                    var newRepoName = message.Body.Changes.NewRepository.Name;
-                    var newIssueNumber = message.Body.Changes.NewIssue.Number;
-                    return TransferIssueAsync(owner, repoName, issueNumber,
-                                              newOwner, newRepoName, newIssueNumber);
-                case GitHubEventMessageKind.IssueDeleted:
-                    return DeleteIssueAsync(owner, repoName, issueNumber);
-            }
-        }
-
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventPullRequest))
-        {
-            var owner = message.Body.Organization.Login;
-            var repoName = message.Body.Repository.Name;
-            var issueNumber = message.Body.PullRequest.Number;
-            var labels = message.Body.PullRequest.Labels.Select(l => l.Name);
-
-            switch (message.Kind)
-            {
-                case GitHubEventMessageKind.PullRequestOpened:
-                case GitHubEventMessageKind.PullRequestReopened:
-                case GitHubEventMessageKind.PullRequestClosed:
-                case GitHubEventMessageKind.PullRequestEdited:
-                case GitHubEventMessageKind.PullRequestAssigned:
-                case GitHubEventMessageKind.PullRequestUnassigned:
-                case GitHubEventMessageKind.PullRequestLabeled:
-                case GitHubEventMessageKind.PullRequestUnlabeled:
-                case GitHubEventMessageKind.PullRequestLocked:
-                case GitHubEventMessageKind.PullRequestUnlocked:
-                case GitHubEventMessageKind.PullRequestReadyForReview:
-                case GitHubEventMessageKind.PullRequestConvertedToDraft:
-                    return UpdateIssueAsync(owner, repoName, issueNumber, labels, queue);
-            }
-        }
-
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventProject))
-        {
-            var projectId = message.Body.Project.Id;
-
-            switch (message.Kind)
-            {
-                case GitHubEventMessageKind.ProjectCreated:
-                case GitHubEventMessageKind.ProjectEdited:
-                case GitHubEventMessageKind.ProjectReopened:
-                    return UpdateProjectAsync(projectId);
-                case GitHubEventMessageKind.ProjectDeleted:
-                    return DeleteProjectAsync(projectId);
-            }
-        }
-
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventProjectColumn))
-        {
-            var projectId = GetProjectIdFromUrl(message.Body.ProjectColumn.ProjectUrl);
-            var columnId = message.Body.ProjectColumn.Id;
-
-            if (projectId is not null)
-            {
-                switch (message.Kind)
+                switch (message.Action)
                 {
-                    case GitHubEventMessageKind.ProjectColumnCreated:
-                    case GitHubEventMessageKind.ProjectColumnEdited:
-                        return UpdateProjectColumnAsync(projectId.Value, columnId);
-                    case GitHubEventMessageKind.ProjectColumnDeleted:
-                        return DeleteProjectColumnAsync(projectId.Value, columnId);
+                    case RepositoryActionValue.Created:
+                        // Don't care
+                        break;
+                    case RepositoryActionValue.Deleted:
+                        return DeleteRepoAsync(owner, repoName);
+                    case RepositoryActionValue.Archived:
+                    case RepositoryActionValue.Unarchived:
+                    case RepositoryActionValue.Publicized:
+                    case RepositoryActionValue.Privatized:
+                        return UpdateRepoAsync(owner, repoName);
+                    case RepositoryActionValue.Renamed:
+                        var repositoryRenamedEvent = (RepositoryRenamedEvent)repositoryEvent;
+                        var fromRepoName = repositoryRenamedEvent.Changes.Repository!.Name!.From;
+                        return UpdateRepoAsync(owner, fromRepoName);
                 }
+
+                break;
             }
-        }
 
-        if (message.Kind.IsEvent(GitHubEventMessageKind.EventProjectCard))
-        {
-            var projectId = GetProjectIdFromUrl(message.Body.ProjectCard.ProjectUrl);
-            var columnId = message.Body.ProjectCard.ColumnId;
-            var cardId = message.Body.ProjectCard.Id;
-
-            if (projectId is not null)
+            case LabelEvent labelEvent:
             {
-                switch (message.Kind)
+                var owner = labelEvent.Organization!.Login;
+                var repoName = labelEvent.Repository!.Name;
+                var labelId = labelEvent.Label.Id;
+                var labelName = labelEvent.Label.Name;
+
+                switch (labelEvent.Action)
                 {
-                    case GitHubEventMessageKind.ProjectCardCreated:
-                    case GitHubEventMessageKind.ProjectCardMoved:
-                        return UpdateProjectCardAsync(projectId.Value, columnId, cardId);
-                    case GitHubEventMessageKind.ProjectCardDeleted:
-                        return DeleteProjectCardAsync(projectId.Value, columnId, cardId);
+                    case LabelActionValue.Created:
+                    case LabelActionValue.Edited:
+                        return UpdateLabelAsync(owner, repoName, labelId, labelName);
+                    case LabelActionValue.Deleted:
+                        return DeleteLabelAsync(owner, repoName, labelId);
                 }
+
+                break;
+            }
+
+            case MilestoneEvent milestoneEvent:
+            {
+                var owner = milestoneEvent.Organization!.Login;
+                var repoName = milestoneEvent.Repository!.Name;
+                var milestoneId = milestoneEvent.Milestone.Id;
+                var milestoneNumber = (int)milestoneEvent.Milestone.Number;
+
+                switch (milestoneEvent.Action)
+                {
+                    case MilestoneActionValue.Created:
+                    case MilestoneActionValue.Edited:
+                    case MilestoneActionValue.Closed:
+                    case MilestoneActionValue.Opened:
+                        return UpdateMilestoneAsync(owner, repoName, milestoneId, milestoneNumber);
+                    case MilestoneActionValue.Deleted:
+                        return DeleteMilestoneAsync(owner, repoName, milestoneId);
+                }
+
+                break;
+            }
+
+            case IssuesEvent issuesEvent:
+            {
+                var owner = issuesEvent.Organization!.Login;
+                var repoName = issuesEvent.Repository!.Name;
+                var issueNumber = (int)issuesEvent.Issue.Number;
+                var labels = issuesEvent.Issue.Labels.Select(l => l.Name);
+
+                switch (message.Action)
+                {
+                    case IssuesActionValue.Opened:
+                    case IssuesActionValue.Reopened:
+                    case IssuesActionValue.Closed:
+                    case IssuesActionValue.Edited:
+                    case IssuesActionValue.Assigned:
+                    case IssuesActionValue.Unassigned:
+                    case IssuesActionValue.Labeled:
+                    case IssuesActionValue.Unlabeled:
+                    case IssuesActionValue.Milestoned:
+                    case IssuesActionValue.Demilestoned:
+                    case IssuesActionValue.Locked:
+                    case IssuesActionValue.Unlocked:
+                        return UpdateIssueAsync(owner, repoName, issueNumber, labels, queue);
+                    case IssuesActionValue.Transferred:
+                        var issuesTransferredEvent = (IssuesTransferredEvent)issuesEvent;
+                        var newOwner = issuesTransferredEvent.Changes!.NewRepository!.Owner.Login;
+                        var newRepoName = issuesTransferredEvent.Changes.NewRepository.Name;
+                        var newIssueNumber = (int)issuesTransferredEvent.Changes.NewIssue!.Number;
+                        return TransferIssueAsync(owner, repoName, issueNumber,
+                            newOwner, newRepoName, newIssueNumber);
+                    case IssuesActionValue.Deleted:
+                        return DeleteIssueAsync(owner, repoName, issueNumber);
+                }
+
+                break;
+            }
+
+            case PullRequestEvent pullRequestEvent:
+            {
+                var owner = pullRequestEvent.Organization!.Login;
+                var repoName = pullRequestEvent.Repository!.Name;
+                var issueNumber = (int)pullRequestEvent.PullRequest.Number;
+                var labels = pullRequestEvent.PullRequest.Labels.Select(l => l.Name);
+
+                switch (message.Action)
+                {
+                    case PullRequestActionValue.Opened:
+                    case PullRequestActionValue.Reopened:
+                    case PullRequestActionValue.Closed:
+                    case PullRequestActionValue.Edited:
+                    case PullRequestActionValue.Assigned:
+                    case PullRequestActionValue.Unassigned:
+                    case PullRequestActionValue.Labeled:
+                    case PullRequestActionValue.Unlabeled:
+                    case PullRequestActionValue.Locked:
+                    case PullRequestActionValue.Unlocked:
+                    case PullRequestActionValue.ReadyForReview:
+                    case PullRequestActionValue.ConvertedToDraft:
+                        return UpdateIssueAsync(owner, repoName, issueNumber, labels, queue);
+                }
+
+                break;
+            }
+
+            case ProjectEvent projectEvent:
+            {
+                var projectId = projectEvent.Project.Id;
+
+                switch (message.Action)
+                {
+                    case ProjectActionValue.Created:
+                    case ProjectActionValue.Edited:
+                    case ProjectActionValue.Reopened:
+                        return UpdateProjectAsync(projectId);
+                    case ProjectActionValue.Deleted:
+                        return DeleteProjectAsync(projectId);
+                }
+
+                break;
+            }
+
+            case ProjectColumnEvent projectColumnEvent:
+            {
+                var projectId = GetProjectIdFromUrl(projectColumnEvent.ProjectColumn.ProjectUrl);
+                var columnId = (int)projectColumnEvent.ProjectColumn.Id;
+
+                if (projectId is not null)
+                {
+                    switch (message.Action)
+                    {
+                        case ProjectColumnActionValue.Created:
+                        case ProjectColumnActionValue.Edited:
+                            return UpdateProjectColumnAsync(projectId.Value, columnId);
+                        case ProjectColumnActionValue.Deleted:
+                            return DeleteProjectColumnAsync(projectId.Value, columnId);
+                    }
+                }
+
+                break;
+            }
+
+            case ProjectCardEvent projectCardEvent:
+            {
+                var projectId = GetProjectIdFromUrl(projectCardEvent.ProjectCard.ProjectUrl);
+                var columnId = (int)projectCardEvent.ProjectCard.ColumnId;
+                var cardId = (int)projectCardEvent.ProjectCard.Id;
+
+                if (projectId is not null)
+                {
+                    switch (message.Action)
+                    {
+                        case ProjectCardActionValue.Created:
+                        case ProjectCardActionValue.Moved:
+                            return UpdateProjectCardAsync(projectId.Value, columnId, cardId);
+                        case ProjectCardActionValue.Deleted:
+                            return DeleteProjectCardAsync(projectId.Value, columnId, cardId);
+                    }
+                }
+
+                break;
             }
         }
 

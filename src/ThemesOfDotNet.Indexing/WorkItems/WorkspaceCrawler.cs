@@ -1,4 +1,4 @@
-﻿using Terrajobst.GitHubEvents;
+﻿using Octokit.Webhooks;
 
 using ThemesOfDotNet.Indexing.AzureDevOps;
 using ThemesOfDotNet.Indexing.Configuration;
@@ -84,7 +84,7 @@ public sealed class WorkspaceCrawler : IWorkspaceCrawlerQueue
         await _releaseCrawler.SaveAsync();
     }
 
-    public async Task<bool> UpdateGitHubAsync(GitHubEventMessage message)
+    public async Task<bool> UpdateGitHubAsync(WebhookEvent message)
     {
         var result = await _gitHubCrawler.UpdateAsync(message, this);
         await CrawlPendingAsync();

@@ -1,6 +1,6 @@
-﻿using Terrajobst.GitHubEvents;
-using Terrajobst.GitHubEvents.AspNetCore;
-
+﻿
+using Octokit.Webhooks;
+using Octokit.Webhooks.AspNetCore;
 using ThemesOfDotNet.Services;
 
 using Toolbelt.Blazor.Extensions.DependencyInjection;
@@ -20,7 +20,7 @@ builder.Services.AddScoped<QueryContextProvider>();
 builder.Services.AddScoped<WorkItemAccessCheckService>();
 builder.Services.AddGitHubAuth(builder.Configuration);
 builder.Services.AddSingleton<GitHubEventProcessingService>();
-builder.Services.AddSingleton<IGitHubEventProcessor>(p => p.GetRequiredService<GitHubEventProcessingService>());
+builder.Services.AddSingleton<WebhookEventProcessor>(p => p.GetRequiredService<GitHubEventProcessingService>());
 builder.Services.AddSingleton<AzureDevOpsCrawlerService>();
 builder.Services.AddSingleton<OspoCrawlerService>();
 builder.Services.AddSingleton<ProductTeamService>();
@@ -59,7 +59,7 @@ app.UseAuthorization();
 
 app.MapBlazorHub();
 app.MapDefaultControllerRoute();
-app.MapGitHubWebHook(secret: gitHubWebHookSecret);
+app.MapGitHubWebhooks(secret: gitHubWebHookSecret);
 app.MapFallbackToPage("/_Host");
 
 app.Run();

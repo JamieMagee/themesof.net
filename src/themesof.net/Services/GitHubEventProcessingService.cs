@@ -1,8 +1,8 @@
-﻿using Terrajobst.GitHubEvents;
+﻿using Octokit.Webhooks;
 
 namespace ThemesOfDotNet.Services;
 
-public sealed class GitHubEventProcessingService : IGitHubEventProcessor
+public sealed class GitHubEventProcessingService : WebhookEventProcessor
 {
     private readonly WorkspaceService _workspaceService;
 
@@ -11,8 +11,9 @@ public sealed class GitHubEventProcessingService : IGitHubEventProcessor
         _workspaceService = workspaceService;
     }
 
-     public void Process(GitHubEventMessage message)
+    public override Task ProcessWebhookAsync(WebhookHeaders headers, WebhookEvent webhookEvent)
     {
-        _workspaceService.UpdateGitHub(message);
+        _workspaceService.UpdateGitHub(headers, webhookEvent);
+        return Task.CompletedTask;
     }
 }

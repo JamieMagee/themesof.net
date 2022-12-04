@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-using Terrajobst.GitHubEvents;
+using Octokit.Webhooks;
 
 using ThemesOfDotNet.Indexing.AzureDevOps;
 using ThemesOfDotNet.Indexing.GitHub;
@@ -60,11 +60,12 @@ public sealed class WorkspaceService : IHostedService
         UpdateWorkspace();
     }
 
-    public void UpdateGitHub(GitHubEventMessage message)
+    public void UpdateGitHub(WebhookHeaders headers, WebhookEvent @event)
     {
-        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(headers);
+        ArgumentNullException.ThrowIfNull(@event);
 
-        Post(new UpdateGitHubMessage(message));
+        Post(new UpdateGitHubMessage(headers, @event));
     }
 
     public void UpdateGitHub(GitHubIssueId id)
@@ -150,7 +151,7 @@ public sealed class WorkspaceService : IHostedService
                     {
                         case UpdateGitHubMessage updateGitHub:
                         {
-                            var handled = await _workspaceCrawler.UpdateGitHubAsync(updateGitHub.Message);
+                            var handled = await _workspaceCrawler.UpdateGitHubAsync(updateGitHub.Event);
                             if (!handled)
                                 _logger.LogInformation("Unhandled message {message}", message);
                             UpdateWorkspace();
@@ -197,18 +198,22 @@ public sealed class WorkspaceService : IHostedService
     
     private sealed class UpdateGitHubMessage : WorkspaceMessage
     {
-        public UpdateGitHubMessage(GitHubEventMessage message)
+        public UpdateGitHubMessage(WebhookHeaders headers, WebhookEvent @event)
         {
-            ArgumentNullException.ThrowIfNull(message);
+            ArgumentNullException.ThrowIfNull(headers);
+            ArgumentNullException.ThrowIfNull(@event);
 
-            Message = message;
+            Headers = headers;
+            Event = @event;
         }
 
-        public GitHubEventMessage Message { get; }
+        public WebhookHeaders Headers { get; }
+
+        public WebhookEvent Event { get; }
 
         public override string ToString()
         {
-            return Message.ToString();
+            return $"'{Headers.Event} {Event.Action}', {Event.ToString()}, Delivery={Headers.Delivery}";
         }
     }
 
